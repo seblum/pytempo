@@ -1,0 +1,38 @@
+[tool.poetry]
+name = "temboo"
+version = "0.1.0"
+description = ""
+authors = ["Sebastian Blum <sebastian.blum@alexanderthamm.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+click = "^8.1.3"
+pandas = "^1.5.3"
+#ipython = "^8.9.0"
+datetime = "^5.0"
+xlrd = "^2.0.1"
+openpyxl = "^3.1.0"
+
+[tool.poetry.scripts]
+temboo= "temboo.main"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[mypy]
+ignore_missing_imports = true
+
+[tool.black]
+line-length = 120
+target-version = ['py38']
+include = '\.py$'
+extend-exclude = '''.venv/'''
+
+[tool.isort]
+line_length = 120
+multi_line_output = 3
+extra_standard_library = "setuptools,logging,os,warnings,sys"
+profile = "black"
+skip = [".gitignore", ".venv"]
