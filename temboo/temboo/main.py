@@ -41,7 +41,7 @@ def _set_output(df: pd.DataFrame, personday: bool) -> tuple[bool, pd.DataFrame]:
 @ click.option("-s", "--sort", "sort", help="sort by week, month, calendarmonth")
 @ click.option("-g", "--group", "group", default="Username", help="filter by issue, person")
 @ click.option("-pd", "--persondays", "personday", is_flag=True, help="get output in person days")
-def csv(file: str, sort: str, group: str, personday: bool) -> None:
+def main(file: str, sort: str, group: str, personday: bool) -> None:
 
     columns = ['Issue Key', 'Work date', 'Username',
                'Project Key', 'Hours', 'Work Description']

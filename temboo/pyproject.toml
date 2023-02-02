@@ -15,7 +15,7 @@ xlrd = "^2.0.1"
 openpyxl = "^3.1.0"
 
 [tool.poetry.scripts]
-temboo= "temboo.main"
+temboo= "temboo.main:main"
 
 [build-system]
 requires = ["poetry-core"]
