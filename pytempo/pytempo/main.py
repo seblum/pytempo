@@ -30,6 +30,7 @@ def _convert_hours_to_pd(df: pd.DataFrame, column_hours: str) -> pd.DataFrame:
 def _set_output(df: pd.DataFrame, personday: bool) -> tuple[bool, pd.DataFrame]:
     display_column = 'Hours'
     if personday:
+        # What do display based on input
         display_column = 'Person Days'
         df = _convert_hours_to_pd(df, 'Hours')
     return display_column, df
@@ -62,13 +63,9 @@ def main(file: str, sort: str, group: str, personday: bool) -> None:
             quit()
 
     dataframe = input_df.copy()
-    # print(dataframe)
+    print(dataframe)
 
-    # What do display based on input
-    display_column = 'Hours'
-    if personday:
-        display_column = 'Person Days'
-
+    # multiple group columns
     click.echo(
         f"\n{click.style(f'Converting file {file}, sorting by {sort}, grouping by {group}', fg='blue')}")
     match sort:
