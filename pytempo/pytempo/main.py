@@ -81,9 +81,10 @@ def main(file: str, sort: str, group: str, personday: bool) -> None:
                 index=group, columns='Work date')[display_column].fillna(0)
         case "month":
             dataframe['Month'] = dataframe['Work date'].dt.strftime('%m')
-            dataframe = dataframe.groupby(['Month', 'Username'])['Hours'].sum(
+            dataframe = dataframe.groupby(group)['Hours'].sum(
             ).reset_index().fillna(0)
             _, dataframe = _set_output(dataframe, personday)
+            dataframe = dataframe.set_index(group)
         case "calendarweek":
             dataframe = _accumulate_hours(
                 df=dataframe, column_group=group, column_accumulate='Hours', column_filter='Work date')
