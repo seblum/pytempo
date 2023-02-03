@@ -1,10 +1,10 @@
 import pandas as pd
-import sys
 import click
 
 
-def _save_table(df: pd.DataFrame, file: str, sort: str) -> None:
-    filename = f'{file.split(".")[0]}_{sort}.csv'
+def _save_table(df: pd.DataFrame, file: str, sort: str, column_group: list) -> None:
+    column_group_string = '_'.join(column_group).replace(' ', '-')
+    filename = f'{file.split(".")[0]}_{sort}_{column_group_string}.csv'
     df.to_csv(filename, index=True)
     click.echo(
         f"\n{click.style('> Success!',fg='green')} file saved as {filename}")
@@ -15,7 +15,8 @@ def _accumulate_hours(df: pd.DataFrame, column_group: list, column_accumulate: s
         df[column_filter]) - pd.to_timedelta(7, unit='d')
     column_group_cp = column_group.copy()
     column_group_cp.append(pd.Grouper(key=column_filter, freq='W-MON'))
-    df = df.groupby(column_group_cp)[column_accumulate].sum().reset_index().sort_values(column_filter)
+    df = df.groupby(column_group_cp)[column_accumulate].sum(
+    ).reset_index().sort_values(column_filter)
     return df
 
 
@@ -23,8 +24,6 @@ def _convert_hours_to_pd(df: pd.DataFrame, column_hours: str) -> pd.DataFrame:
     df['Person Days'] = (df[column_hours] / 8).round(1)
     df = df.drop(column_hours, axis=1)
     return df
-
-# write output
 
 
 def _set_output(df: pd.DataFrame, personday: bool) -> tuple[bool, pd.DataFrame]:
@@ -36,36 +35,64 @@ def _set_output(df: pd.DataFrame, personday: bool) -> tuple[bool, pd.DataFrame]:
     return display_column, df
 
 
+def _check_columns(df_small: list, df_big: list) -> None:
+    if not all(elem in df_big.columns for elem in df_small):
+        missing_columns = list(set(df_small) - set(df_big.columns))
+        click.echo(
+            f"{click.style('> I am sorry!', fg='red')} Following columns are not present: {missing_columns}")
+        quit()
+
+
 @ click.version_option()
 @ click.command()
 @ click.argument('file')
+@ click.option("-a", "--accumulate", "accumulate", default="Hours", help="accumulate: Hours")
+@ click.option("-d", "--date", "date", default="Work date", help="set the date: Work date")
 @ click.option("-s", "--sort", "sort", help="sort by week, month, calendarmonth")
 @ click.option("-g", "--group", "group", multiple=True, default=["Username"], help="filter by issue, person")
 @ click.option("-pd", "--persondays", "personday", is_flag=True, help="get output in person days")
-def main(file: str, sort: str, group, personday: bool) -> None:
+@ click.option("-c", "--columns", "show_columns", is_flag=True, help="returns all columns")
+def main(file: str, accumulate: str, date: str, sort: str, group: tuple, personday: bool, show_columns: bool) -> None:
 
-    columns = ['Issue Key', 'Work date', 'Username',
-               'Project Key', 'Hours', 'Work Description']
+    if show_columns:
+        filetype = f'{file.split(".")[1]}'
+        match filetype:
+            case 'csv':
+                # might be with statement which is better
+                input_df = pd.read_csv(file, sep=",")
+            case 'xls' | 'xlsx':
+                input_df = pd.read_excel(file)
+            case _:
+                click.echo(
+                    f"{click.style('> I am sorry!', fg='red')} The file format '{filetype}' is currently not supported.")
+                quit()
+        click.echo(
+            f"{click.style('> Success!',fg='green')} The file has following columns: {click.style(', '.join(input_df.columns),fg='blue')}")
+        quit()
+
+    DATE_COLUMN = date
+    ACC_COLUMN = accumulate
+
+    column_group = list(group)  # needs conversion also for later steps
+    df_columns = [DATE_COLUMN, ACC_COLUMN] + column_group
 
     # check whether csv or xcsl and read accordingly
     filetype = f'{file.split(".")[1]}'
     match filetype:
         case 'csv':
             # might be with statement which is better
-            input_df = pd.read_csv(file, usecols=columns, sep=",")
-            input_df['Work date'] = pd.to_datetime(input_df['Work date'])
+            dataframe = pd.read_csv(file, sep=",")
+            _check_columns(df_small=df_columns, df_big=dataframe)
+            dataframe[DATE_COLUMN] = pd.to_datetime(dataframe[DATE_COLUMN])
+
         case 'xls' | 'xlsx':
-            input_df = pd.read_excel(file, usecols=columns)
-            input_df['Work date'] = pd.to_datetime(input_df['Work date'])
+            dataframe = pd.read_excel(file)
+            _check_columns(df_small=df_columns, df_big=dataframe)
+            dataframe[DATE_COLUMN] = pd.to_datetime(dataframe[DATE_COLUMN])
         case _:
             click.echo(
                 f"{click.style('> I am sorry!', fg='red')} The file format '{filetype}' is currently not supported.")
             quit()
-
-    dataframe = input_df.copy()
-    #print(dataframe)
-
-    column_group = list(group)
 
     # multiple group columns
     click.echo(
@@ -74,23 +101,23 @@ def main(file: str, sort: str, group, personday: bool) -> None:
         case "week":
 
             dataframe = _accumulate_hours(
-                df=dataframe, column_group=column_group, column_accumulate='Hours', column_filter='Work date')
+                df=dataframe, column_group=column_group, column_accumulate=ACC_COLUMN, column_filter=DATE_COLUMN)
             display_column, dataframe = _set_output(dataframe, personday)
             # Pivot table of dataframe
             dataframe = dataframe.pivot(
-                index=column_group, columns='Work date')[display_column].fillna(0)
+                index=column_group, columns=DATE_COLUMN)[display_column].fillna(0)
         case "month":
-            dataframe['Month'] = dataframe['Work date'].dt.strftime('%m')
-            dataframe = dataframe.groupby(column_group)['Hours'].sum(
+            dataframe['Month'] = dataframe[DATE_COLUMN].dt.strftime('%m')
+            dataframe = dataframe.groupby(column_group)[ACC_COLUMN].sum(
             ).reset_index().fillna(0)
             _, dataframe = _set_output(dataframe, personday)
             dataframe = dataframe.set_index(column_group)
         case "calendarweek":
             dataframe = _accumulate_hours(
-                df=dataframe, column_group=column_group, column_accumulate='Hours', column_filter='Work date')
+                df=dataframe, column_group=column_group, column_accumulate=ACC_COLUMN, column_filter=DATE_COLUMN)
             # convert week to calendar week
-            dataframe['Week number'] = dataframe['Work date'].dt.isocalendar().week
-            dataframe = dataframe.drop('Work date', axis=1)
+            dataframe['Week number'] = dataframe[DATE_COLUMN].dt.isocalendar().week
+            dataframe = dataframe.drop(DATE_COLUMN, axis=1)
             display_column, dataframe = _set_output(dataframe, personday)
             # Pivot table of dataframe
             dataframe = dataframe.pivot(
@@ -101,4 +128,4 @@ def main(file: str, sort: str, group, personday: bool) -> None:
             quit()
 
     click.echo(dataframe)
-    _save_table(dataframe, file, sort)
+    _save_table(dataframe, file, sort, column_group)
