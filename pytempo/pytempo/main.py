@@ -1,7 +1,6 @@
 import pandas as pd
 import sys
 import click
-# from Ipython.display import display
 
 
 def _save_table(df: pd.DataFrame, file: str, sort: str) -> None:
@@ -11,11 +10,12 @@ def _save_table(df: pd.DataFrame, file: str, sort: str) -> None:
         f"\n{click.style('> Success!',fg='green')} file saved as {filename}")
 
 
-def _accumulate_hours(df: pd.DataFrame, column_group: str, column_accumulate: str, column_filter: str) -> pd.DataFrame:
+def _accumulate_hours(df: pd.DataFrame, column_group: list, column_accumulate: str, column_filter: str) -> pd.DataFrame:
     df[column_filter] = pd.to_datetime(
         df[column_filter]) - pd.to_timedelta(7, unit='d')
-    df = df.groupby(
-        [column_group, pd.Grouper(key=column_filter, freq='W-MON')])[column_accumulate].sum().reset_index().sort_values(column_filter)
+    column_group_cp = column_group.copy()
+    column_group_cp.append(pd.Grouper(key=column_filter, freq='W-MON'))
+    df = df.groupby(column_group_cp)[column_accumulate].sum().reset_index().sort_values(column_filter)
     return df
 
 
@@ -40,9 +40,9 @@ def _set_output(df: pd.DataFrame, personday: bool) -> tuple[bool, pd.DataFrame]:
 @ click.command()
 @ click.argument('file')
 @ click.option("-s", "--sort", "sort", help="sort by week, month, calendarmonth")
-@ click.option("-g", "--group", "group", default="Username", help="filter by issue, person")
+@ click.option("-g", "--group", "group", multiple=True, default=["Username"], help="filter by issue, person")
 @ click.option("-pd", "--persondays", "personday", is_flag=True, help="get output in person days")
-def main(file: str, sort: str, group: str, personday: bool) -> None:
+def main(file: str, sort: str, group, personday: bool) -> None:
 
     columns = ['Issue Key', 'Work date', 'Username',
                'Project Key', 'Hours', 'Work Description']
@@ -63,35 +63,38 @@ def main(file: str, sort: str, group: str, personday: bool) -> None:
             quit()
 
     dataframe = input_df.copy()
-    print(dataframe)
+    #print(dataframe)
+
+    column_group = list(group)
 
     # multiple group columns
     click.echo(
-        f"\n{click.style(f'Converting file {file}, sorting by {sort}, grouping by {group}', fg='blue')}")
+        f"{click.style(f'Converting file {file}, sorting by {sort}, grouping by {group}', fg='blue')}\n")
     match sort:
         case "week":
+
             dataframe = _accumulate_hours(
-                df=dataframe, column_group=group, column_accumulate='Hours', column_filter='Work date')
+                df=dataframe, column_group=column_group, column_accumulate='Hours', column_filter='Work date')
             display_column, dataframe = _set_output(dataframe, personday)
             # Pivot table of dataframe
             dataframe = dataframe.pivot(
-                index=group, columns='Work date')[display_column].fillna(0)
+                index=column_group, columns='Work date')[display_column].fillna(0)
         case "month":
             dataframe['Month'] = dataframe['Work date'].dt.strftime('%m')
-            dataframe = dataframe.groupby(group)['Hours'].sum(
+            dataframe = dataframe.groupby(column_group)['Hours'].sum(
             ).reset_index().fillna(0)
             _, dataframe = _set_output(dataframe, personday)
-            dataframe = dataframe.set_index(group)
+            dataframe = dataframe.set_index(column_group)
         case "calendarweek":
             dataframe = _accumulate_hours(
-                df=dataframe, column_group=group, column_accumulate='Hours', column_filter='Work date')
+                df=dataframe, column_group=column_group, column_accumulate='Hours', column_filter='Work date')
             # convert week to calendar week
             dataframe['Week number'] = dataframe['Work date'].dt.isocalendar().week
             dataframe = dataframe.drop('Work date', axis=1)
             display_column, dataframe = _set_output(dataframe, personday)
             # Pivot table of dataframe
             dataframe = dataframe.pivot(
-                index=group, columns='Week number')[display_column].fillna(0)
+                index=column_group, columns='Week number')[display_column].fillna(0)
         case _:
             click.echo(
                 f"{click.style('> I am sorry!', fg='red')} '--sort {sort}' is currently not supported.")
